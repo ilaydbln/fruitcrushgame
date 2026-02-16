@@ -1,0 +1,497 @@
+﻿@{
+    ViewData["Title"] = "Fruit Crush";
+}
+@model fruitcrush.Models.GameModel
+
+<h1 style="text-align:center">Fruit Crush</h1>
+
+<div id="game-container">
+    <!-- Üst bilgi çubuğu -->
+    <div id="info-bar">
+        <div id="level-box">Level: 1</div>
+        <div id="score-box">Score: 0</div>
+        <div id="moves-box">Moves: 0</div>
+        <div id="timer-box"></div>
+    </div>
+
+    <!-- Ana oyun alanı -->
+    <div id="main-area">
+        <!-- Oyun grid -->
+        <div id="game"></div>
+
+        <!-- Kurallar kutucuğu -->
+        <div id="rules-box">
+            <h3>Rules</h3>
+            <p id="rules-text">The goal of each level will be shown here.</p>
+        </div>
+    </div>
+
+    <!-- Büyük CRUSH ve Play Again -->
+    <div id="big-crush"></div>
+    <button id="play-again" style="display:none; margin-top:10px; padding:10px 20px; font-size:18px;">Play Again</button>
+</div>
+
+<style>
+    body {
+        background: #b3e5fc;
+        font-family: sans-serif;
+    }
+
+    #game-container {
+        width: 900px;
+        margin: 20px auto;
+        padding: 20px;
+        background: #4fc3f7; /* mavi çerçeve */
+        border: 3px solid #0288d1;
+        border-radius: 15px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    #info-bar {
+        display: flex;
+        justify-content: space-around;
+        width: 100%;
+        margin-bottom: 20px;
+        font-weight: bold;
+        font-size: 18px;
+    }
+
+    #main-area {
+        display: flex;
+        width: 100%;
+        gap: 20px;
+        justify-content: center;
+    }
+
+    #game {
+        display: grid;
+        gap: 5px;
+        background: white;
+        padding: 10px;
+        border-radius: 15px;
+    }
+
+    .cell {
+        width: 60px;
+        height: 60px;
+        background: white;
+        font-size: 30px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        border-radius: 10px;
+        cursor: pointer;
+    }
+
+    .selected {
+        outline: 4px solid red;
+    }
+
+    .ice {
+        background: #bbdefb;
+        border: 3px solid #2196f3;
+    }
+
+    #rules-box {
+        width: 250px;
+        padding: 15px;
+        border: 2px solid #2196f3;
+        border-radius: 10px;
+        background: white;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        font-size: 16px;
+    }
+
+    #big-crush {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%,-50%) scale(0);
+        font-size: 80px;
+        color: red;
+        font-weight: bold;
+        display: none;
+        z-index: 1000;
+        text-align: center;
+    }
+
+    .confetti {
+        position: fixed;
+        width: 10px;
+        height: 10px;
+        top: -10px;
+        z-index: 2000;
+        animation: fall 3s linear forwards;
+    }
+
+    @@keyframes fall {
+        to
+
+    {
+        transform: translateY(100vh) rotate(720deg);
+        opacity: 0;
+    }
+
+    }
+
+    #play-again {
+        cursor: pointer;
+        border: none;
+        background: #ff4081;
+        color: white;
+        border-radius: 8px;
+    }
+</style>
+
+@section Scripts {
+    <script>
+        class GameModel {
+            constructor(){
+                this.fruits=["🍓","🍉","🍒","🍎","🍌","🍍"];
+                this.level=1;
+                this.score=0;
+                this.moves=0;
+                this.size=6;
+                this.target=50;
+                this.timer=null;
+                this.timeLeft=0;
+                this.iceBlocks=[];
+            }
+
+            initLevel(){
+                this.score=0;
+                this.iceBlocks=[];
+                this.timeLeft=0;
+
+                switch(this.level){
+                    case 1:
+                        this.size=6;
+                        this.moves=10;
+                        this.target=50;
+                        break;
+                    case 2:
+                        this.size=8;
+                        this.moves=10;
+                        this.target=70;
+                        break;
+                    case 3:
+                        this.size=8;
+                        this.moves=15;
+                        this.target=null;
+                        this.initIce(4);
+                        break;
+                    case 4:
+                        this.size=8;
+                        this.moves=null;
+                        this.target=200;
+                        this.timeLeft=90;
+                        break;
+                    case 5:
+                        this.size=8;
+                        this.moves=null;
+                        this.target=150;
+                        this.timeLeft=120;
+                        this.initIce(8);
+                        break;
+                }
+            }
+
+            initIce(count){
+                this.iceBlocks=[];
+                for(let i=0;i<count;i++){
+                    this.iceBlocks.push(i);
+                }
+            }
+        }
+
+        class GameView{
+            constructor(){
+                this.game=document.getElementById("game");
+                this.scoreBox=document.getElementById("score-box");
+                this.movesBox=document.getElementById("moves-box");
+                this.levelBox=document.getElementById("level-box");
+                this.timerBox=document.getElementById("timer-box");
+                this.rulesText=document.getElementById("rules-text");
+                this.playAgainBtn=document.getElementById("play-again");
+            }
+
+            renderBoard(model){
+                this.game.innerHTML="";
+                this.game.style.gridTemplateColumns=`repeat(${model.size},60px)`;
+
+                for(let i=0;i<model.size*model.size;i++){
+                    const cell=document.createElement("div");
+                    cell.classList.add("cell");
+                    cell.dataset.index=i;
+                    cell.textContent=model.fruits[Math.floor(Math.random()*6)];
+
+                    if(model.iceBlocks.includes(i)){
+                        cell.classList.add("ice");
+                    }
+
+                    this.game.appendChild(cell);
+                }
+
+                this.updateUI(model);
+                this.updateRules(model.level);
+            }
+
+            updateUI(model){
+                this.scoreBox.textContent="Score: "+model.score;
+                this.movesBox.textContent=model.moves!==null? "Moves: "+model.moves:"";
+                this.levelBox.textContent="Level: "+model.level;
+                this.timerBox.textContent=model.timeLeft>0? "Time: "+model.timeLeft:"";
+            }
+
+            showCrush(){
+                const el=document.getElementById("big-crush");
+                el.innerHTML="CRUSH!";
+                el.style.display="block";
+                el.style.transform="translate(-50%,-50%) scale(1)";
+                setTimeout(()=>{
+                    el.style.display="none";
+                    el.style.transform="translate(-50%,-50%) scale(0)";
+                },1000);
+            }
+
+            showBigMessage(text){
+                const el=document.getElementById("big-crush");
+                el.innerHTML=text;
+                el.style.display="block";
+                el.style.transform="translate(-50%,-50%) scale(1)";
+                setTimeout(()=>{
+                    el.style.display="none";
+                    el.style.transform="translate(-50%,-50%) scale(0)";
+                },2000);
+            }
+
+            launchConfetti(){
+                for(let i=0;i<100;i++){
+                    const conf=document.createElement("div");
+                    conf.classList.add("confetti");
+
+                    const colors=["red","yellow","blue","green","orange","purple"];
+                    conf.style.background=colors[Math.floor(Math.random()*colors.length)];
+
+                    conf.style.left=Math.random()*100+"vw";
+                    conf.style.animationDuration=(Math.random()*2+2)+"s";
+
+                    document.body.appendChild(conf);
+                    setTimeout(()=>conf.remove(),3000);
+                }
+            }
+
+            updateRules(level){
+                let text="";
+                switch(level){
+                    case 1:
+                        text="Level 1: 6x6 grid, reach 50 points in 10 moves and see CRUSH!";
+                        break;
+                    case 2:
+                        text="Level 2: 8x8 grid, reach 70 points in 10 moves.";
+                        break;
+                    case 3:
+                        text="Level 3: 8x8 grid, break all ice blocks in 15 moves.";
+                        break;
+                    case 4:
+                        text="Level 4: 8x8 grid, reach 200 points in 90 seconds.";
+                        break;
+                    case 5:
+                        text="Level 5: 8x8 grid, break 8 ice blocks and reach 150 points in 2 minutes. GAME COMPLETED will appear!";
+                        break;
+                }
+                this.rulesText.innerHTML=text;
+            }
+        }
+
+        class GameController{
+            constructor(model,view){
+                this.model=model;
+                this.view=view;
+                this.firstCell=null;
+                this.startLevel();
+
+                this.view.playAgainBtn.addEventListener("click",()=>{
+                    this.model.level=1;
+                    this.startLevel();
+                    this.view.playAgainBtn.style.display="none";
+                });
+            }
+
+            startLevel(){
+                this.model.initLevel();
+                this.view.renderBoard(this.model);
+                this.addEvents();
+
+                if(this.model.timeLeft>0){
+                    this.startTimer();
+                }
+            }
+
+            addEvents(){
+                document.querySelectorAll(".cell").forEach(cell=>{
+                    cell.addEventListener("click",()=>this.handleClick(cell));
+                });
+            }
+
+            isNeighbor(index1,index2){
+                const size=this.model.size;
+                const r1=Math.floor(index1/size);
+                const c1=index1%size;
+                const r2=Math.floor(index2/size);
+                const c2=index2%size;
+
+                return (
+                    (r1===r2 && Math.abs(c1-c2)===1) ||
+                    (c1===c2 && Math.abs(r1-r2)===1)
+                );
+            }
+
+            handleClick(cell){
+                if(this.firstCell===cell){
+                    cell.classList.remove("selected");
+                    this.firstCell=null;
+                    return;
+                }
+
+                if(!this.firstCell){
+                    this.firstCell=cell;
+                    cell.classList.add("selected");
+                    return;
+                }
+
+                const index1=parseInt(this.firstCell.dataset.index);
+                const index2=parseInt(cell.dataset.index);
+
+                if(this.isNeighbor(index1,index2)){
+                    this.swap(this.firstCell,cell);
+
+                    if(this.model.moves!==null){
+                        this.model.moves--;
+                    }
+
+                    this.checkMatch();
+                    this.view.updateUI(this.model);
+                    this.checkWin();
+                }
+
+                this.firstCell.classList.remove("selected");
+                this.firstCell=null;
+            }
+
+            swap(a,b){
+                let temp=a.textContent;
+                a.textContent=b.textContent;
+                b.textContent=temp;
+            }
+
+            checkMatch(){
+                const cells=document.querySelectorAll(".cell");
+                const size=this.model.size;
+
+                for(let i=0;i<cells.length;i++){
+                    if(i%size<size-2){
+                        if(cells[i].textContent===cells[i+1].textContent &&
+                           cells[i].textContent===cells[i+2].textContent){
+                            this.crush([i,i+1,i+2]);
+                        }
+                    }
+                    if(i<size*(size-2)){
+                        if(cells[i].textContent===cells[i+size].textContent &&
+                           cells[i].textContent===cells[i+size*2].textContent){
+                            this.crush([i,i+size,i+size*2]);
+                        }
+                    }
+                }
+            }
+
+            crush(indexes){
+                indexes.forEach(i=>{
+                    const cell=document.querySelectorAll(".cell")[i];
+
+                    if(this.model.iceBlocks.includes(i)){
+                        cell.classList.remove("ice");
+                        this.model.iceBlocks=
+                            this.model.iceBlocks.filter(x=>x!==i);
+                    }
+
+                    cell.textContent=this.model.fruits[Math.floor(Math.random()*6)];
+                });
+
+                this.model.score+=10;
+            }
+
+            startTimer(){
+                if(this.model.timer) clearInterval(this.model.timer);
+
+                this.model.timer=setInterval(()=>{
+                    this.model.timeLeft--;
+                    this.view.updateUI(this.model);
+
+                    if(this.model.timeLeft<=0){
+                        clearInterval(this.model.timer);
+                        this.checkWin();
+                    }
+                },1000);
+            }
+
+            checkWin(){
+                // Level 1 special CRUSH
+                if(this.model.level===1 && this.model.score>=this.model.target){
+                    this.view.showCrush();
+                    setTimeout(()=>{
+                        alert("Level 2!");
+                        this.nextLevel();
+                    },1000);
+                    return;
+                }
+
+                // Level 5 end
+                if(this.model.level===5){
+                    if(this.model.score>=150 && this.model.iceBlocks.length===0){
+                        this.view.showBigMessage("GAME COMPLETED");
+                        this.view.launchConfetti();
+                        this.view.playAgainBtn.style.display="block";
+                        return;
+                    }
+                }
+
+                // Other target levels
+                if(this.model.level!==5 && this.model.target && this.model.score>=this.model.target){
+                    alert("Level Completed!");
+                    this.nextLevel();
+                    return;
+                }
+
+                // Level 3 ice cleared
+                if(this.model.level===3 && this.model.iceBlocks.length===0){
+                    alert("Level Completed!");
+                    this.nextLevel();
+                    return;
+                }
+
+                if(this.model.moves===0){
+                    alert("Game Over!");
+                }
+            }
+
+            nextLevel(){
+                this.model.level++;
+                this.startLevel();
+            }
+        }
+
+        const model=new GameModel();
+        const view=new GameView();
+        const controller=new GameController(model,view);
+    </script>
+}
+
+
+
